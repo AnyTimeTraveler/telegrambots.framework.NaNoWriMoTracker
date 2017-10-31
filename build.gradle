@@ -1,0 +1,56 @@
+version '1.0-SNAPSHOT'
+group 'org.simonscode'
+
+buildscript {
+    ext.kotlin_version = '1.1.51'
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+    }
+
+    dependencies {
+        classpath group: 'org.jetbrains.kotlin', name: 'kotlin-gradle-plugin', version: kotlin_version
+        classpath "com.github.jengelman.gradle.plugins:shadow:2.0.1"
+    }
+
+}
+apply plugin: 'idea'
+apply plugin: 'kotlin'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'org.telegram', name: 'telegrambots', version: '3.4'
+    compile group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: kotlin_version
+    compile group: 'org.simonscode', name: 'telegrambots.framework', version: '1.0-SNAPSHOT'
+    compile group: 'org.jsoup', name: 'jsoup', version: '1.8.3'
+    compile group: 'jfree', name: 'jfreechart', version: '1.0.13'
+    testCompile group: 'com.google.code.gson', name: 'gson', version: '2.6.2'
+    testCompile group: 'commons-io', name: 'commons-io', version: '2.5'
+
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+shadowJar {
+    baseName = project.name
+    destinationDir = new File("_working_directory/modules/")
+    if (!destinationDir.exists())
+        destinationDir.mkdirs()
+    dependencies {
+        exclude(dependency(group: 'org.telegram', name: 'telegrambots', version: '3.4'))
+        exclude(dependency(group: 'org.simonscode', name: 'telegrambots.framework', version: '1.0-SNAPSHOT'))
+    }
+}
