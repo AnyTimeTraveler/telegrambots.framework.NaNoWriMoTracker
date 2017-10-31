@@ -91,8 +91,12 @@ class NanoTracker : Module {
                     Utils.reply(sender, update, "No user given!\nUse: /nano chart (user0) [user1] [user...]")
                 val file = File("words.jpg")
                 val users = args.subList(2, args.size)
-                getChart(file, users)
-                sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
+                try {
+                    getChart(file, users)
+                    sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
+                } catch (e: Exception) {
+                    Utils.send(sender, message, "Error retrieving data: " + e.localizedMessage)
+                }
             }
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
             else -> Utils.reply(sender, message, getHelpText(null)!!)
