@@ -92,7 +92,7 @@ class NanoTracker : Module {
                 val file = File("words.jpg")
                 val users = args.subList(2, args.size)
                 getChart(file, users)
-                sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for" + users.joinToString(", ")).setChatId(message.chatId))
+                sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
             }
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
             else -> Utils.reply(sender, message, getHelpText(null)!!)
