@@ -57,6 +57,8 @@ class NanoTracker : Module {
 
     override fun processUpdate(sender: Bot, update: Update) {
         val message = Utils.getMessageFromUpdate(update, true) ?: return
+        if (!message.hasText())
+            return
         val args = message.text.split(" ")
         if (args[0] != "/nano")
             return
@@ -64,6 +66,7 @@ class NanoTracker : Module {
             Utils.send(sender, update, getHelpText(null)!!)
             return
         }
+        val users = args.subList(2, args.size)
         when (args[1]) {
             "stats" -> {
                 if (args.size == 3) {
@@ -90,7 +93,6 @@ class NanoTracker : Module {
                 if (args.size < 3)
                     Utils.reply(sender, update, "No user given!\nUse: /nano chart (user0) [user1] [user...]")
                 val file = File("words.jpg")
-                val users = args.subList(2, args.size)
                 try {
                     getChart(file, users)
                     sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
@@ -98,9 +100,27 @@ class NanoTracker : Module {
                     Utils.send(sender, message, "Error retrieving data: " + e.localizedMessage)
                 }
             }
+            "compare" -> Utils.reply(sender, message, compare(users))
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
             else -> Utils.reply(sender, message, getHelpText(null)!!)
         }
+    }
+
+    private fun compare(users: List<String>): String {
+        val stats = users.map { java.lang.Double.parseDouble(getNovelStats(it)?.get("Words Written Today")?.replace(",", "")) }.sortedDescending().toMutableList()
+
+        for (i in stats.indices) {
+            stats[i] = stats[i] / stats[0]
+        }
+        val sb = StringBuilder()
+        sb.append("Today's progress compared by ratio:\n")
+        for (i in stats.indices) {
+            sb.append(users[i])
+            sb.append(" : ")
+            sb.append(stats[i])
+            sb.append("\n")
+        }
+        return sb.toString()
     }
 
     private fun getNovelStats(user: String): HashMap<String, String>? {
@@ -177,17 +197,19 @@ class NanoTracker : Module {
                     System.err.println("ERROR 1")
                     continue
                 }
-                if (once) {
-                    reference = stats["wordgoal"]?.let { convertChartStringToPointMap(it) }
-                    if (reference != null)
-                        once = false
-                }
 
                 // Convert stats into map of data points
                 val days = stats["chart"]?.let { convertChartStringToPointMap(it) }
+
                 if (days == null) {
                     System.err.println("ERROR 2")
                     continue
+                }
+
+                if (once) {
+                    reference = stats["wordgoal"]?.let { convertChartStringToPointMap(it, days.size) }
+                    if (reference != null)
+                        once = false
                 }
                 data.put(user, days)
             }
@@ -203,12 +225,18 @@ class NanoTracker : Module {
     }
 
     private fun convertChartStringToPointMap(input: String): HashMap<Int, Int> {
+        return convertChartStringToPointMap(input, Int.MAX_VALUE)
+    }
+
+    private fun convertChartStringToPointMap(input: String, until: Int): HashMap<Int, Int> {
         val days = HashMap<Int, Int>()
         var day = 1
         days.put(0, 0)
         val wordCountPerPerson = input.substring(1, input.length - 1).split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-        for (wordcount in wordCountPerPerson) {
+        for ((counter, wordcount) in wordCountPerPerson.withIndex()) {
             days.put(day++, Integer.parseInt(wordcount))
+            if (counter > until - 2)
+                break
         }
         return days
     }
