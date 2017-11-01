@@ -107,20 +107,43 @@ class NanoTracker : Module {
     }
 
     private fun compare(users: List<String>): String {
-        val stats = users.map { java.lang.Double.parseDouble(getNovelStats(it)?.get("Words Written Today")?.replace(",", "")) }.sortedDescending().toMutableList()
+        val stats = users.map { getNovelStats(it) }
 
-        for (i in stats.indices) {
-            stats[i] = stats[i] / stats[0]
-        }
+        val comparableAspects = listOf("Words Written Today", "Target Average Words Per Day", "Words Per Day To Finish On Time", "Total Words Written")
+
         val sb = StringBuilder()
-        sb.append("Today's progress compared by ratio:\n")
-        for (i in stats.indices) {
-            sb.append(users[i])
+        sb.append("\n")
+        for (aspect in comparableAspects) {
+            compareAspect(aspect, sb, users, stats)
+            sb.append("\n")
+        }
+
+        val finishOnDates = stats.mapNotNull { it?.get("At This Rate You Will Finish On") }
+        val wordsToFinishDates = stats.mapIndexedNotNull { i, it -> users[i] to (Integer.parseInt(it?.get("Total Words Written")?.replace(",", "")) to finishOnDates[i]) }.sortedByDescending { (_, value) -> value.first }
+
+        sb.append("At This Rate You Will Finish On:\n")
+        for (i in wordsToFinishDates) {
+            sb.append(i.first)
             sb.append(" : ")
-            sb.append(stats[i])
+            sb.append(i.second.second)
             sb.append("\n")
         }
         return sb.toString()
+    }
+
+    private fun compareAspect(aspect: String, sb: StringBuilder, users: List<String>, stats: List<HashMap<String, String>?>) {
+        val absoluteList = stats.mapIndexedNotNull { i, it -> users[i] to Integer.parseInt(it?.get(aspect)?.replace(",", "")) }.toList().sortedByDescending { (_, value) -> value }
+
+        sb.append(aspect)
+        sb.append(":\n")
+        for (i in absoluteList) {
+            sb.append(i.first)
+            sb.append(" : ")
+            sb.append(i.second)
+            sb.append(" : ")
+            sb.append(i.second / absoluteList.first().second.toDouble())
+            sb.append("\n")
+        }
     }
 
     private fun getNovelStats(user: String): HashMap<String, String>? {
