@@ -35,7 +35,6 @@ class NanoTracker : Module {
         get() = "1.0"
 
     override fun getHelpText(args: Array<String>?): String? {
-        println(4)
         return "Description:\n" +
                 "Gets the stats from the NaNoWriMo-Website, so you don't have to bother.\n" +
                 "Usages:\n" +
@@ -66,7 +65,9 @@ class NanoTracker : Module {
             Utils.send(sender, update, getHelpText(null)!!)
             return
         }
-        val users = args.subList(2, args.size)
+        var users = args.subList(2, args.size)
+        if (users.isEmpty())
+            users = listOf("myrrany", "nander", "saegaroth", "jmking80")
         when (args[1]) {
             "stats" -> {
                 if (args.size == 3) {
@@ -90,8 +91,6 @@ class NanoTracker : Module {
                 }
             }
             "graph", "chart" -> {
-                if (args.size < 3)
-                    Utils.reply(sender, update, "No user given!\nUse: /nano chart (user0) [user1] [user...]")
                 val file = File("words.jpg")
                 try {
                     getChart(file, users)
@@ -255,7 +254,7 @@ class NanoTracker : Module {
         val days = HashMap<Int, Int>()
         var day = 1
         days.put(0, 0)
-        val wordCountPerPerson = input.substring(1, input.length - 1).split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        val wordCountPerPerson = input.substring(1, input.length - 1).split(",").dropLastWhile { it.isEmpty() }
         for ((counter, wordcount) in wordCountPerPerson.withIndex()) {
             days.put(day++, Integer.parseInt(wordcount))
             if (counter > until - 2)
