@@ -189,9 +189,9 @@ class NanoTracker : Module {
         chart.styler.legendBackgroundColor = Color.WHITE
         chart.styler.chartFontColor = Color.BLACK
         chart.styler.chartTitleBoxBackgroundColor = Color(125, 167, 245)
-        chart.styler.isChartTitleBoxVisible = true
+        chart.styler.isChartTitleBoxVisible = false
         chart.styler.chartTitleBoxBorderColor = Color.BLACK
-        chart.styler.isPlotGridLinesVisible = false
+        chart.styler.isPlotGridLinesVisible = true
 
         chart.styler.axisTickPadding = 20
         chart.styler.axisTickMarkLength = 15
@@ -201,36 +201,37 @@ class NanoTracker : Module {
         chart.styler.legendFont = Font(Font.SERIF, Font.PLAIN, 18)
         chart.styler.legendPosition = LegendPosition.InsideSE
         chart.styler.legendSeriesLineLength = 12
-        chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.ITALIC, 18)
-        chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 11)
+        chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 18)
+        chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 14)
         chart.styler.datePattern = "'Day' d HH:mm"
         chart.styler.decimalPattern = "#0"
         chart.styler.locale = Locale.GERMAN
 
         for (entry in wordsPerDay) {
             val series = chart.addSeries(entry.key, entry.value.map { (a, _) -> a }.toList(), entry.value.map { (_, b) -> b }.toList())
-            series.marker = SeriesMarkers.NONE
+            series.marker = SeriesMarkers.CIRCLE
             series.lineStyle = SeriesLines.SOLID
         }
         val c = Calendar.getInstance()
-        c.set(2017, Calendar.OCTOBER, 31, 0, 0, 0)
+        c.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
         var i = 0.0
         var k = 0.0
-        val today = Date()
+        val tomorrow = Calendar.getInstance()
+        tomorrow.add(Calendar.DAY_OF_MONTH, 2)
         val goalList = mutableMapOf<Date, Double>()
         val myrthesGoalList = mutableMapOf<Date, Double>()
-        while (i < 50_000 && k < 70_000 && c.getTime().before(today)) {
-            c.add(Calendar.DAY_OF_MONTH, 1)
+        while (i < 50_000 && k < 70_000 && c.getTime().before(tomorrow.getTime())) {
             goalList.put(c.getTime(), i)
             myrthesGoalList.put(c.getTime(), k)
             i += 50_000 / 30
             k += 70_000 / 30
+            c.add(Calendar.DAY_OF_MONTH, 1)
         }
-        val goalSeries = chart.addSeries("Wordgoal", goalList.keys.toList(), goalList.values.toList())
-        goalSeries.marker = SeriesMarkers.NONE
+        val goalSeries = chart.addSeries("Daily Goal", goalList.keys.toList(), goalList.values.toList())
+        goalSeries.marker = SeriesMarkers.SQUARE
         goalSeries.lineStyle = SeriesLines.SOLID
-        val myrthesGoalSeries = chart.addSeries("Myrthe's personal Wordgoal", myrthesGoalList.keys.toList(), myrthesGoalList.values.toList())
-        myrthesGoalSeries.marker = SeriesMarkers.NONE
+        val myrthesGoalSeries = chart.addSeries("Myrthe's daily Goal", myrthesGoalList.keys.toList(), myrthesGoalList.values.toList())
+        myrthesGoalSeries.marker = SeriesMarkers.SQUARE
         myrthesGoalSeries.lineStyle = SeriesLines.SOLID
         BitmapEncoder.saveBitmap(chart, outputFile.absolutePath, BitmapEncoder.BitmapFormat.PNG)
     }
@@ -249,7 +250,7 @@ class NanoTracker : Module {
                 state!![user]!!.put(c.time, 0)
             }
             val wordsWritten = stats?.get("Total Words Written")?.replace(",", "")?.toInt()
-            if (!state!![user]?.values?.last()?.equals(wordsWritten)!!)
+            if (!state!![user]?.values?.sortedDescending()?.first()?.equals(wordsWritten)!!)
                 wordsWritten?.let { state!![user]!!.put(Date(), it) }
         }
     }
