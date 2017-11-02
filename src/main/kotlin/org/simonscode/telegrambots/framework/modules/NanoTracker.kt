@@ -1,38 +1,42 @@
 package org.simonscode.telegrambots.framework.modules
 
-import org.jfree.chart.ChartFactory
-import org.jfree.chart.ChartUtilities
-import org.jfree.chart.encoders.EncoderUtil
-import org.jfree.chart.plot.PlotOrientation
-import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer
-import org.jfree.data.xy.XYSeries
-import org.jfree.data.xy.XYSeriesCollection
 import org.jsoup.Jsoup
+import org.knowm.xchart.BitmapEncoder
+import org.knowm.xchart.XYChartBuilder
+import org.knowm.xchart.style.Styler.LegendPosition
+import org.knowm.xchart.style.colors.ChartColor
+import org.knowm.xchart.style.lines.SeriesLines
+import org.knowm.xchart.style.markers.SeriesMarkers
 import org.simonscode.telegrambots.framework.Bot
 import org.simonscode.telegrambots.framework.Module
 import org.simonscode.telegrambots.framework.Utils
 import org.telegram.telegrambots.api.methods.send.SendPhoto
 import org.telegram.telegrambots.api.objects.Update
-import java.awt.BasicStroke
 import java.awt.Color
-import java.awt.geom.Rectangle2D
-import java.awt.image.BufferedImage
-import java.io.BufferedOutputStream
+import java.awt.Font
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URL
+import java.text.SimpleDateFormat
 import java.util.*
-import java.util.regex.Pattern
+import java.util.Locale
+import kotlin.collections.HashMap
 
-/**
- * Created by simon on 05.11.16.
- */
+
 class NanoTracker : Module {
+    private class DataGrabber(private val tracker: NanoTracker) : TimerTask() {
+        private val users = listOf("myrrany", "nander", "saegaroth", "jmking80")
+        override fun run() {
+            users.forEach { tracker.addStatIfChanged(it, tracker.getNovelStats(it)) }
+        }
+    }
+
     override val name: String
         get() = "NaNoWriMoStatTracker"
     override val version: String
-        get() = "1.0"
+        get() = "2.0"
+    private var state: MutableMap<String, MutableMap<Date, Int>>? = null
+    private val dataGrabber = Timer()
 
     override fun getHelpText(args: Array<String>?): String? {
         return "Description:\n" +
@@ -49,10 +53,24 @@ class NanoTracker : Module {
     }
 
     override fun saveState(): Any? {
-        return null
+        dataGrabber.cancel()
+        return state
     }
 
-    override fun setup(state: Any?) {}
+    override fun setup(state: Any?) {
+        @Suppress("UNCHECKED_CAST")
+        if (state != null && state is MutableMap<*, *>) {
+            val sdf = SimpleDateFormat("EEE MMM dd HH:mm:ss z yyyy")
+            this.state = (state as MutableMap<String, MutableMap<String, Double>>).
+                    map { (a, b) ->
+                        a to b.map { (c, d) -> sdf.parse(c) to d.toInt() }.
+                                toMap().toMutableMap()
+                    }.toMap().toMutableMap()
+        } else {
+            this.state = HashMap()
+        }
+        dataGrabber.scheduleAtFixedRate(DataGrabber(this), 10_000, 15 * 60 * 1000)
+    }
 
     override fun processUpdate(sender: Bot, update: Update) {
         val message = Utils.getMessageFromUpdate(update, true) ?: return
@@ -91,12 +109,13 @@ class NanoTracker : Module {
                 }
             }
             "graph", "chart" -> {
-                val file = File("words.jpg")
+                val file = File("words.png")
                 try {
                     getChart(file, users)
                     sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
                 } catch (e: Exception) {
                     Utils.send(sender, message, "Error retrieving data: " + e.localizedMessage)
+                    e.printStackTrace()
                 }
             }
             "compare" -> Utils.reply(sender, message, compare(users))
@@ -120,6 +139,8 @@ class NanoTracker : Module {
         val finishOnDates = stats.mapNotNull { it?.get("At This Rate You Will Finish On") }
         val wordsToFinishDates = stats.mapIndexedNotNull { i, it -> users[i] to (Integer.parseInt(it?.get("Total Words Written")?.replace(",", "")) to finishOnDates[i]) }.sortedByDescending { (_, value) -> value.first }
 
+        print(getNovelStats(users[0])?.get("wordgoal"))
+
         sb.append("At This Rate You Will Finish On:\n")
         for (i in wordsToFinishDates) {
             sb.append(i.first)
@@ -130,7 +151,7 @@ class NanoTracker : Module {
         return sb.toString()
     }
 
-    private fun compareAspect(aspect: String, sb: StringBuilder, users: List<String>, stats: List<HashMap<String, String>?>) {
+    private fun compareAspect(aspect: String, sb: StringBuilder, users: List<String>, stats: List<Map<String, String>?>) {
         val absoluteList = stats.mapIndexedNotNull { i, it -> users[i] to Integer.parseInt(it?.get(aspect)?.replace(",", "")) }.toList().sortedByDescending { (_, value) -> value }
 
         sb.append(aspect)
@@ -145,121 +166,91 @@ class NanoTracker : Module {
         }
     }
 
-    private fun getNovelStats(user: String): HashMap<String, String>? {
-        try {
+    fun getNovelStats(user: String): MutableMap<String, String>? {
+        return try {
             val doc = Jsoup.parse(URL("http://nanowrimo.org/participants/$user/stats"), 5000)
             val stats = doc.getElementById("novel_stats")
-            val output = HashMap<String, String>()
-            for (element in stats.children()) {
-                output.put(element.child(0).text(), element.child(1).text())
-            }
-            val wordsPerDay = Pattern.compile(".*var\\s*rawCamperData\\s*=\\s*(\\S+);.*").matcher(doc.toString())
-            val wordgoal = Pattern.compile(".*var\\s*parData\\s*=\\s*(\\S+).*").matcher(doc.toString())
-            wordsPerDay.find()
-            wordgoal.find()
-            output.put("chart", wordsPerDay.group(1))
-            output.put("wordgoal", wordgoal.group(1))
-            return output
+            stats.children().map { it.child(0).text() to it.child(1).text() }.toMap().toMutableMap()
         } catch (e: IOException) {
             e.printStackTrace()
-            return null
+            null
         }
     }
 
-    private fun generateChart(outputFile: File, wordsPerDay: Map<String, Map<Int, Int>>) {
-        val dataset = XYSeriesCollection()
-        for ((key, value) in wordsPerDay) {
-            val stats = XYSeries(key)
-            for ((key1, value1) in value) {
-                stats.add(key1, value1)
-            }
-            dataset.addSeries(stats)
+    @Suppress("UsePropertyAccessSyntax")
+    private fun generateChart(outputFile: File, wordsPerDay: Map<String, Map<Date, Int>>) {
+        // Create Chart
+        val chart = XYChartBuilder().width(1024).height(768).title("Wordcount").xAxisTitle("Time").yAxisTitle("Words").build()
+
+        // Customize Chart
+        chart.styler.plotBackgroundColor = ChartColor.getAWTColor(ChartColor.GREY)
+        chart.styler.plotGridLinesColor = Color.WHITE
+        chart.styler.chartBackgroundColor = Color.WHITE
+        chart.styler.legendBackgroundColor = Color.WHITE
+        chart.styler.chartFontColor = Color.BLACK
+        chart.styler.chartTitleBoxBackgroundColor = Color(125, 167, 245)
+        chart.styler.isChartTitleBoxVisible = true
+        chart.styler.chartTitleBoxBorderColor = Color.BLACK
+        chart.styler.isPlotGridLinesVisible = false
+
+        chart.styler.axisTickPadding = 20
+        chart.styler.axisTickMarkLength = 15
+        chart.styler.plotMargin = 20
+
+        chart.styler.chartTitleFont = Font(Font.MONOSPACED, Font.BOLD, 24)
+        chart.styler.legendFont = Font(Font.SERIF, Font.PLAIN, 18)
+        chart.styler.legendPosition = LegendPosition.InsideSE
+        chart.styler.legendSeriesLineLength = 12
+        chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.ITALIC, 18)
+        chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 11)
+        chart.styler.datePattern = "'Day' d HH:mm"
+        chart.styler.decimalPattern = "#0"
+        chart.styler.locale = Locale.GERMAN
+
+        for (entry in wordsPerDay) {
+            val series = chart.addSeries(entry.key, entry.value.map { (a, _) -> a }.toList(), entry.value.map { (_, b) -> b }.toList())
+            series.marker = SeriesMarkers.NONE
+            series.lineStyle = SeriesLines.SOLID
         }
-
-        val xylineChart = ChartFactory.createXYLineChart(
-                "Daily Wordcount",
-                "Day",
-                "Words",
-                dataset,
-                PlotOrientation.VERTICAL,
-                true, true, false)
-
-        val width = 1024 /* Width of the image */
-        val height = 768 /* Height of the image */
-
-        val plot = xylineChart.xyPlot
-        val renderer = XYLineAndShapeRenderer()
-        renderer.setStroke(BasicStroke(2f))
-        renderer.setSeriesPaint(0, Color.BLUE)
-        renderer.setSeriesPaint(1, Color.RED)
-        renderer.setSeriesPaint(2, Color.MAGENTA)
-        renderer.setSeriesPaint(3, Color.CYAN)
-        renderer.setSeriesPaint(4, Color.green)
-        renderer.setSeriesPaint(5, Color.ORANGE)
-        plot.renderer = renderer
-
-        val out = BufferedOutputStream(FileOutputStream(outputFile))
-        val image = BufferedImage(width, height, 1)
-        val g2 = image.createGraphics()
-        plot.render(g2, Rectangle2D.Double(0.0, 0.0, width.toDouble(), height.toDouble()), 0, null, null)
-        g2.dispose()
-        EncoderUtil.writeBufferedImage(image, "jpeg", out)
-        ChartUtilities.saveChartAsJPEG(outputFile, xylineChart, width, height)
+        val c = Calendar.getInstance()
+        c.set(2017, Calendar.OCTOBER, 31, 0, 0, 0)
+        var i = 0.0
+        var k = 0.0
+        val today = Date()
+        val goalList = mutableMapOf<Date, Double>()
+        val myrthesGoalList = mutableMapOf<Date, Double>()
+        while (i < 50_000 && k < 70_000 && c.getTime().before(today)) {
+            c.add(Calendar.DAY_OF_MONTH, 1)
+            goalList.put(c.getTime(), i)
+            myrthesGoalList.put(c.getTime(), k)
+            i += 50_000 / 30
+            k += 70_000 / 30
+        }
+        val goalSeries = chart.addSeries("Wordgoal", goalList.keys.toList(), goalList.values.toList())
+        goalSeries.marker = SeriesMarkers.NONE
+        goalSeries.lineStyle = SeriesLines.SOLID
+        val myrthesGoalSeries = chart.addSeries("Myrthe's personal Wordgoal", myrthesGoalList.keys.toList(), myrthesGoalList.values.toList())
+        myrthesGoalSeries.marker = SeriesMarkers.NONE
+        myrthesGoalSeries.lineStyle = SeriesLines.SOLID
+        BitmapEncoder.saveBitmap(chart, outputFile.absolutePath, BitmapEncoder.BitmapFormat.PNG)
     }
 
     private fun getChart(file: File, users: List<String>) {
-        try {
-            var reference: HashMap<Int, Int>? = null
-            var once = true
-            val data = HashMap<String, HashMap<Int, Int>>()
-            for (user in users) {
-                // Get stats for user
-                val stats = getNovelStats(user)
-                if (stats == null) {
-                    System.err.println("ERROR 1")
-                    continue
-                }
-
-                // Convert stats into map of data points
-                val days = stats["chart"]?.let { convertChartStringToPointMap(it) }
-
-                if (days == null) {
-                    System.err.println("ERROR 2")
-                    continue
-                }
-
-                if (once) {
-                    reference = stats["wordgoal"]?.let { convertChartStringToPointMap(it, days.size) }
-                    if (reference != null)
-                        once = false
-                }
-                data.put(user, days)
-            }
-            if (reference != null) {
-                data.put("Daily Goal", reference)
-            }
-
-            generateChart(file, data)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
+        val stats = users.map { it to state?.get(it) }.mapNotNull { (a, b) -> if (b == null) null else a to b }.toMap()
+        generateChart(file, stats)
     }
 
-    private fun convertChartStringToPointMap(input: String): HashMap<Int, Int> {
-        return convertChartStringToPointMap(input, Int.MAX_VALUE)
-    }
-
-    private fun convertChartStringToPointMap(input: String, until: Int): HashMap<Int, Int> {
-        val days = HashMap<Int, Int>()
-        var day = 1
-        days.put(0, 0)
-        val wordCountPerPerson = input.substring(1, input.length - 1).split(",").dropLastWhile { it.isEmpty() }
-        for ((counter, wordcount) in wordCountPerPerson.withIndex()) {
-            days.put(day++, Integer.parseInt(wordcount))
-            if (counter > until - 2)
-                break
+    internal fun addStatIfChanged(user: String, stats: MutableMap<String, String>?) {
+        if (state != null) {
+            if (!state!!.contains(user)) {
+                state!!.put(user, HashMap())
+                val c = Calendar.getInstance()
+                c.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
+                state!![user]!!.put(c.time, 0)
+            }
+            val wordsWritten = stats?.get("Total Words Written")?.replace(",", "")?.toInt()
+            if (!state!![user]?.values?.last()?.equals(wordsWritten)!!)
+                wordsWritten?.let { state!![user]!!.put(Date(), it) }
         }
-        return days
     }
 }
