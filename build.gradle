@@ -30,7 +30,7 @@ dependencies {
     compile group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: kotlin_version
     compile group: 'org.simonscode', name: 'telegrambots.framework', version: '1.0-SNAPSHOT'
     compile group: 'org.jsoup', name: 'jsoup', version: '1.8.3'
-    compile group: 'jfree', name: 'jfreechart', version: '1.0.13'
+    compile group: 'org.knowm.xchart', name: 'xchart', version: '3.5.0'
     testCompile group: 'com.google.code.gson', name: 'gson', version: '2.6.2'
     testCompile group: 'commons-io', name: 'commons-io', version: '2.5'
 
@@ -50,7 +50,9 @@ shadowJar {
     if (!destinationDir.exists())
         destinationDir.mkdirs()
     dependencies {
+        //noinspection GroovyAssignabilityCheck
         exclude(dependency(group: 'org.telegram', name: 'telegrambots', version: '3.4'))
+        //noinspection GroovyAssignabilityCheck
         exclude(dependency(group: 'org.simonscode', name: 'telegrambots.framework', version: '1.0-SNAPSHOT'))
     }
 }
