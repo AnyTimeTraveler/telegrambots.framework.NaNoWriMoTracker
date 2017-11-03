@@ -237,7 +237,7 @@ class NanoTracker : Module {
         chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 18)
         chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 14)
         chart.styler.datePattern = "'Day' d HH:mm"
-        chart.styler.decimalPattern = "#0"
+        chart.styler.decimalPattern = "###,###"
         chart.styler.locale = Locale.GERMAN
 
         val endOfToday = Calendar.getInstance()
