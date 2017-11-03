@@ -240,15 +240,11 @@ class NanoTracker : Module {
         chart.styler.decimalPattern = "###,###"
         chart.styler.locale = Locale.GERMAN
 
-        val endOfToday = Calendar.getInstance()
-        endOfToday.setTime(Date())
-        endOfToday.set(Calendar.HOUR_OF_DAY, 23)
-        endOfToday.set(Calendar.MINUTE, 59)
-        endOfToday.set(Calendar.SECOND, 59)
+        val now = Date()
 
         for (entry in wordsPerDay) {
             val data = entry.value.map { (a, b) -> a to b }.toMutableList()
-            data.add(endOfToday.getTime() to data.last().second)
+            data.add(now to data.last().second)
             val series = chart.addSeries(entry.key, data.map { (a, _) -> a }, data.map { (_, b) -> b })
             series.marker = SeriesMarkers.CIRCLE
             series.lineStyle = SeriesLines.SOLID
