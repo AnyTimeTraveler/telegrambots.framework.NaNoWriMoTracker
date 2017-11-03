@@ -10,6 +10,7 @@ import org.knowm.xchart.style.markers.SeriesMarkers
 import org.simonscode.telegrambots.framework.Bot
 import org.simonscode.telegrambots.framework.Module
 import org.simonscode.telegrambots.framework.Utils
+import org.telegram.telegrambots.api.methods.send.SendMessage
 import org.telegram.telegrambots.api.methods.send.SendPhoto
 import org.telegram.telegrambots.api.objects.Update
 import java.awt.Color
@@ -24,10 +25,22 @@ import kotlin.collections.HashMap
 
 
 class NanoTracker : Module {
-    private class DataGrabber(private val tracker: NanoTracker) : TimerTask() {
+    private class DataGrabber(private val tracker: NanoTracker, private val force: Boolean) : TimerTask() {
         private val users = listOf("myrrany", "nander", "saegaroth", "jmking80")
+        private val behind = mutableListOf<String>()
         override fun run() {
-            users.forEach { tracker.addStatIfChanged(it, tracker.getNovelStats(it)) }
+            users.map { it to tracker.getNovelStats(it) }.forEach { (a, b) ->
+                if (force && tracker.bot != null && tracker.chatId != null) {
+                    if (Integer.parseInt(b?.get("Words Per Day To Finish On Time")) > 1667) {
+                        behind.add(a)
+                    }
+                }
+                tracker.addStats(force, a, b)
+            }
+            if (force && behind.isNotEmpty()) {
+                tracker.bot!!.execute(SendMessage().setChatId(tracker.chatId).setText("Some people have fallen a bit behind,\nbut it's still possible to finish on time! Go, " + behind.joinToString(", ") + "!"))
+                behind.clear()
+            }
         }
     }
 
@@ -35,6 +48,10 @@ class NanoTracker : Module {
         get() = "NaNoWriMoStatTracker"
     override val version: String
         get() = "2.0"
+
+    private var bot: Bot? = null
+    private var chatId: Long? = null
+
     private var state: MutableMap<String, MutableMap<Date, Int>>? = null
     private val dataGrabber = Timer()
 
@@ -69,7 +86,18 @@ class NanoTracker : Module {
         } else {
             this.state = HashMap()
         }
-        dataGrabber.scheduleAtFixedRate(DataGrabber(this), 10_000, 15 * 60 * 1000)
+        startTimers()
+    }
+
+    @Suppress("UsePropertyAccessSyntax")
+    private fun startTimers() {
+        dataGrabber.scheduleAtFixedRate(DataGrabber(this, false), 10_000, 15 * 60 * 1000)
+        val c = Calendar.getInstance()
+        c.setTime(Date())
+        c.set(Calendar.HOUR_OF_DAY, 23)
+        c.set(Calendar.MINUTE, 59)
+        c.set(Calendar.SECOND, 30)
+        dataGrabber.scheduleAtFixedRate(DataGrabber(this, true), c.getTime(), 24 * 60 * 60 * 1000)
     }
 
     override fun processUpdate(sender: Bot, update: Update) {
@@ -120,6 +148,13 @@ class NanoTracker : Module {
             }
             "compare" -> Utils.reply(sender, message, compare(users))
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
+            "setchannel" -> {
+                if (bot == null || chatId == null) {
+                    bot = sender
+                    chatId = message.chatId
+                    println("Got it!")
+                }
+            }
             else -> Utils.reply(sender, message, getHelpText(null)!!)
         }
     }
@@ -138,8 +173,6 @@ class NanoTracker : Module {
 
         val finishOnDates = stats.mapNotNull { it?.get("At This Rate You Will Finish On") }
         val wordsToFinishDates = stats.mapIndexedNotNull { i, it -> users[i] to (Integer.parseInt(it?.get("Total Words Written")?.replace(",", "")) to finishOnDates[i]) }.sortedByDescending { (_, value) -> value.first }
-
-        print(getNovelStats(users[0])?.get("wordgoal"))
 
         sb.append("At This Rate You Will Finish On:\n")
         for (i in wordsToFinishDates) {
@@ -207,25 +240,33 @@ class NanoTracker : Module {
         chart.styler.decimalPattern = "#0"
         chart.styler.locale = Locale.GERMAN
 
+        val endOfToday = Calendar.getInstance()
+        endOfToday.setTime(Date())
+        endOfToday.set(Calendar.HOUR_OF_DAY, 23)
+        endOfToday.set(Calendar.MINUTE, 59)
+        endOfToday.set(Calendar.SECOND, 59)
+
         for (entry in wordsPerDay) {
-            val series = chart.addSeries(entry.key, entry.value.map { (a, _) -> a }.toList(), entry.value.map { (_, b) -> b }.toList())
+            val data = entry.value.map { (a, b) -> a to b }.toMutableList()
+            data.add(endOfToday.getTime() to data.last().second)
+            val series = chart.addSeries(entry.key, data.map { (a, _) -> a }, data.map { (_, b) -> b })
             series.marker = SeriesMarkers.CIRCLE
             series.lineStyle = SeriesLines.SOLID
         }
-        val c = Calendar.getInstance()
-        c.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
+        val referenceDay = Calendar.getInstance()
+        referenceDay.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
         var i = 0.0
         var k = 0.0
         val tomorrow = Calendar.getInstance()
         tomorrow.add(Calendar.DAY_OF_MONTH, 2)
         val goalList = mutableMapOf<Date, Double>()
         val myrthesGoalList = mutableMapOf<Date, Double>()
-        while (i < 50_000 && k < 70_000 && c.getTime().before(tomorrow.getTime())) {
-            goalList.put(c.getTime(), i)
-            myrthesGoalList.put(c.getTime(), k)
+        while (i < 50_000 && k < 80_000 && referenceDay.getTime().before(tomorrow.getTime())) {
+            goalList.put(referenceDay.getTime(), i)
+            myrthesGoalList.put(referenceDay.getTime(), k)
             i += 50_000 / 30
-            k += 70_000 / 30
-            c.add(Calendar.DAY_OF_MONTH, 1)
+            k += 80_000 / 30
+            referenceDay.add(Calendar.DAY_OF_MONTH, 1)
         }
         val goalSeries = chart.addSeries("Daily Goal", goalList.keys.toList(), goalList.values.toList())
         goalSeries.marker = SeriesMarkers.SQUARE
@@ -241,7 +282,7 @@ class NanoTracker : Module {
         generateChart(file, stats)
     }
 
-    internal fun addStatIfChanged(user: String, stats: MutableMap<String, String>?) {
+    internal fun addStats(force: Boolean, user: String, stats: MutableMap<String, String>?) {
         if (state != null) {
             if (!state!!.contains(user)) {
                 state!!.put(user, HashMap())
@@ -250,7 +291,7 @@ class NanoTracker : Module {
                 state!![user]!!.put(c.time, 0)
             }
             val wordsWritten = stats?.get("Total Words Written")?.replace(",", "")?.toInt()
-            if (!state!![user]?.values?.sortedDescending()?.first()?.equals(wordsWritten)!!)
+            if (force || !state!![user]?.values?.sortedDescending()?.first()?.equals(wordsWritten)!!)
                 wordsWritten?.let { state!![user]!!.put(Date(), it) }
         }
     }
