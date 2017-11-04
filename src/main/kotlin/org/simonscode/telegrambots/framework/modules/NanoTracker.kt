@@ -31,7 +31,7 @@ class NanoTracker : Module {
         override fun run() {
             users.map { it to tracker.getNovelStats(it) }.forEach { (a, b) ->
                 if (force && tracker.bot != null && tracker.chatId != null) {
-                    if (Integer.parseInt(b?.get("Words Per Day To Finish On Time")) > 1667) {
+                    if (Integer.parseInt(b?.get("Words Per Day To Finish On Time")?.replace(",", "")) > 1667) {
                         behind.add(a)
                     }
                 }
@@ -148,12 +148,21 @@ class NanoTracker : Module {
             }
             "compare" -> Utils.reply(sender, message, compare(users))
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
-            "setchannel" -> {
-                if (bot == null || chatId == null) {
-                    bot = sender
-                    chatId = message.chatId
-                    println("Got it!")
+            "set" -> {
+                if (args.size < 4) {
+                    Utils.reply(sender, message, "Fuck you! @#%#$@^#$%#$$~!@$#!@%%$!")
+                    return
                 }
+                when (args[2]) {
+                    "channel" -> {
+                        if (bot == null || chatId == null) {
+                            bot = sender
+                            chatId = message.chatId
+                            Utils.reply(sender, message, "Got it!")
+                        }
+                    }
+                }
+
             }
             else -> Utils.reply(sender, message, getHelpText(null)!!)
         }
@@ -213,7 +222,7 @@ class NanoTracker : Module {
     @Suppress("UsePropertyAccessSyntax")
     private fun generateChart(outputFile: File, wordsPerDay: Map<String, Map<Date, Int>>) {
         // Create Chart
-        val chart = XYChartBuilder().width(1024).height(768).title("Wordcount").xAxisTitle("Time").yAxisTitle("Words").build()
+        val chart = XYChartBuilder().width(1280).height(960).title("Wordcount").xAxisTitle("Time").yAxisTitle("Words").build()
 
         // Customize Chart
         chart.styler.plotBackgroundColor = ChartColor.getAWTColor(ChartColor.GREY)
@@ -226,23 +235,25 @@ class NanoTracker : Module {
         chart.styler.chartTitleBoxBorderColor = Color.BLACK
         chart.styler.isPlotGridLinesVisible = true
 
-        chart.styler.axisTickPadding = 20
-        chart.styler.axisTickMarkLength = 15
-        chart.styler.plotMargin = 20
+        chart.styler.axisTickPadding = 25
+        chart.styler.axisTickMarkLength = 22
+        chart.styler.plotMargin = 0
 
-        chart.styler.chartTitleFont = Font(Font.MONOSPACED, Font.BOLD, 24)
-        chart.styler.legendFont = Font(Font.SERIF, Font.PLAIN, 18)
+        chart.styler.chartTitleFont = Font(Font.MONOSPACED, Font.BOLD, 30)
+        chart.styler.legendFont = Font(Font.SERIF, Font.PLAIN, 22)
         chart.styler.legendPosition = LegendPosition.InsideSE
-        chart.styler.legendSeriesLineLength = 12
-        chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 18)
-        chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 14)
+        chart.styler.legendSeriesLineLength = 15
+        chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 22)
+        chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 18)
         chart.styler.datePattern = "'Day' d HH:mm"
         chart.styler.decimalPattern = "###,###"
         chart.styler.locale = Locale.GERMAN
 
         val now = Date()
 
-        for (entry in wordsPerDay) {
+        val sortedWordsPerDay = wordsPerDay.toList().sortedByDescending { (_, b) -> b.toList().sortedByDescending { (_, d) -> d }.first().second }.toMap()
+
+        for (entry in sortedWordsPerDay) {
             val data = entry.value.map { (a, b) -> a to b }.toMutableList()
             data.add(now to data.last().second)
             val series = chart.addSeries(entry.key, data.map { (a, _) -> a }, data.map { (_, b) -> b })
@@ -287,7 +298,7 @@ class NanoTracker : Module {
                 state!![user]!!.put(c.time, 0)
             }
             val wordsWritten = stats?.get("Total Words Written")?.replace(",", "")?.toInt()
-            if (force || !state!![user]?.values?.sortedDescending()?.first()?.equals(wordsWritten)!!)
+            if (force || !state!![user]?.values?.last()?.equals(wordsWritten)!!)
                 wordsWritten?.let { state!![user]!!.put(Date(), it) }
         }
     }
