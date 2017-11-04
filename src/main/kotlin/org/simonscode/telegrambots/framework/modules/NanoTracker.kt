@@ -53,7 +53,8 @@ class NanoTracker : Module {
     private var chatId: Long? = null
 
     private var state: MutableMap<String, MutableMap<Date, Int>>? = null
-    private val dataGrabber = Timer()
+    private val dataGrabber = DataGrabber(this, false)
+    private val dataGrabberTimer = Timer()
 
     override fun getHelpText(args: Array<String>?): String? {
         return "Description:\n" +
@@ -70,7 +71,7 @@ class NanoTracker : Module {
     }
 
     override fun saveState(): Any? {
-        dataGrabber.cancel()
+        dataGrabberTimer.cancel()
         return state
     }
 
@@ -89,15 +90,16 @@ class NanoTracker : Module {
         startTimers()
     }
 
+
     @Suppress("UsePropertyAccessSyntax")
     private fun startTimers() {
-        dataGrabber.scheduleAtFixedRate(DataGrabber(this, false), 10_000, 15 * 60 * 1000)
+        dataGrabberTimer.scheduleAtFixedRate(dataGrabber, 10_000, 15 * 60 * 1000)
         val c = Calendar.getInstance()
         c.setTime(Date())
         c.set(Calendar.HOUR_OF_DAY, 23)
         c.set(Calendar.MINUTE, 59)
         c.set(Calendar.SECOND, 30)
-        dataGrabber.scheduleAtFixedRate(DataGrabber(this, true), c.getTime(), 24 * 60 * 60 * 1000)
+        dataGrabberTimer.scheduleAtFixedRate(DataGrabber(this, true), c.getTime(), 24 * 60 * 60 * 1000)
     }
 
     override fun processUpdate(sender: Bot, update: Update) {
@@ -139,6 +141,7 @@ class NanoTracker : Module {
             "graph", "chart" -> {
                 val file = File("words.png")
                 try {
+                    dataGrabber.run()
                     getChart(file, users)
                     sender.sendPhoto(SendPhoto().setNewPhoto(file).setCaption("Stats for " + users.joinToString(", ")).setChatId(message.chatId))
                 } catch (e: Exception) {
