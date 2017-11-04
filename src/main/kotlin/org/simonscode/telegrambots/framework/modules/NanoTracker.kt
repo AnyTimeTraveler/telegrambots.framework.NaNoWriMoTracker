@@ -152,7 +152,7 @@ class NanoTracker : Module {
             "compare" -> Utils.reply(sender, message, compare(users))
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
             "set" -> {
-                if (args.size < 4) {
+                if (args.size < 3) {
                     Utils.reply(sender, message, "Fuck you! @#%#$@^#$%#$$~!@$#!@%%$!")
                     return
                 }
@@ -174,7 +174,7 @@ class NanoTracker : Module {
     private fun compare(users: List<String>): String {
         val stats = users.map { getNovelStats(it) }
 
-        val comparableAspects = listOf("Words Written Today", "Target Average Words Per Day", "Words Per Day To Finish On Time", "Total Words Written")
+        val comparableAspects = listOf("Words Written Today", "Words Per Day To Finish On Time", "Total Words Written")
 
         val sb = StringBuilder()
         sb.append("\n")
