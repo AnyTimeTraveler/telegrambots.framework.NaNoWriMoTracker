@@ -5,6 +5,7 @@ import org.knowm.xchart.BitmapEncoder
 import org.knowm.xchart.XYChartBuilder
 import org.knowm.xchart.style.Styler.LegendPosition
 import org.knowm.xchart.style.colors.ChartColor
+import org.knowm.xchart.style.colors.XChartSeriesColors
 import org.knowm.xchart.style.lines.SeriesLines
 import org.knowm.xchart.style.markers.SeriesMarkers
 import org.simonscode.telegrambots.framework.Bot
@@ -90,7 +91,6 @@ class NanoTracker : Module {
         startTimers()
     }
 
-
     @Suppress("UsePropertyAccessSyntax")
     private fun startTimers() {
         dataGrabberTimer.scheduleAtFixedRate(dataGrabber, 10_000, 15 * 60 * 1000)
@@ -151,22 +151,21 @@ class NanoTracker : Module {
             }
             "compare" -> Utils.reply(sender, message, compare(users))
             "help" -> Utils.reply(sender, message, getHelpText(null)!!)
-            "set" -> {
-                if (args.size < 3) {
-                    Utils.reply(sender, message, "Fuck you! @#%#$@^#$%#$$~!@$#!@%%$!")
-                    return
-                }
-                when (args[2]) {
-                    "channel" -> {
-                        if (bot == null || chatId == null) {
-                            bot = sender
-                            chatId = message.chatId
-                            Utils.reply(sender, message, "Got it!")
-                        }
-                    }
-                }
-
-            }
+//            "set" -> {
+//                if (args.size < 3) {
+//                    Utils.reply(sender, message, "Fuck you! @#%#$@^#$%#$$~!@$#!@%%$!")
+//                    return
+//                }
+//                when (args[2]) {
+//                    "channel" -> {
+//                        if (bot == null || chatId == null) {
+//                            bot = sender
+//                            chatId = message.chatId
+//                            Utils.reply(sender, message, "Got it!")
+//                        }
+//                    }
+//                }
+//            }
             else -> Utils.reply(sender, message, getHelpText(null)!!)
         }
     }
@@ -222,6 +221,13 @@ class NanoTracker : Module {
         }
     }
 
+    private val peopleMap: Map<String, Pair<String, Color>> = mapOf(
+            "nander" to ("Nander" to XChartSeriesColors.ORANGE),
+            "myrrany" to ("Myrthe" to XChartSeriesColors.BLUE),
+            "jmking80" to ("Jaimie" to XChartSeriesColors.MAGENTA),
+            "saegaroth" to ("Jonah" to XChartSeriesColors.GREEN)
+    )
+
     @Suppress("UsePropertyAccessSyntax")
     private fun generateChart(outputFile: File, wordsPerDay: Map<String, Map<Date, Int>>) {
         // Create Chart
@@ -248,42 +254,68 @@ class NanoTracker : Module {
         chart.styler.legendSeriesLineLength = 15
         chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 22)
         chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 18)
-        chart.styler.datePattern = "'Day' d HH:mm"
+        chart.styler.datePattern = "'Day' d"
         chart.styler.decimalPattern = "###,###"
         chart.styler.locale = Locale.GERMAN
 
         val now = Date()
-
         val sortedWordsPerDay = wordsPerDay.toList().sortedByDescending { (_, b) -> b.toList().sortedByDescending { (_, d) -> d }.first().second }.toMap()
 
         for (entry in sortedWordsPerDay) {
             val data = entry.value.map { (a, b) -> a to b }.toMutableList()
             data.add(now to data.last().second)
-            val series = chart.addSeries(entry.key, data.map { (a, _) -> a }, data.map { (_, b) -> b })
+            val series = chart.addSeries(peopleMap[entry.key]?.first ?: entry.key, data.map { (a, _) -> a }, data.map { (_, b) -> b })
             series.marker = SeriesMarkers.CIRCLE
             series.lineStyle = SeriesLines.SOLID
+            peopleMap[entry.key]?.let {
+                series.lineColor = it.second
+                series.markerColor = it.second
+                series.fillColor = it.second
+            }
         }
-        val referenceDay = Calendar.getInstance()
-        referenceDay.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
+        val historyDay = Calendar.getInstance()
+        historyDay.set(2017, Calendar.NOVEMBER, 1, 0, 0, 0)
         var i = 0.0
         var k = 0.0
+        var j = 0.0
         val tomorrow = Calendar.getInstance()
         tomorrow.add(Calendar.DAY_OF_MONTH, 2)
+
         val goalList = mutableMapOf<Date, Double>()
         val myrthesGoalList = mutableMapOf<Date, Double>()
-        while (i < 50_000 && k < 80_000 && referenceDay.getTime().before(tomorrow.getTime())) {
-            goalList.put(referenceDay.getTime(), i)
-            myrthesGoalList.put(referenceDay.getTime(), k)
+        val jonahsGoalList = mutableMapOf<Date, Double>()
+
+        while (i < 50_000 && k < 80_000 && j < 30_000 && historyDay.getTime().before(tomorrow.getTime())) {
+            goalList.put(historyDay.getTime(), i)
+            myrthesGoalList.put(historyDay.getTime(), k)
+            jonahsGoalList.put(historyDay.getTime(), j)
+            j += 1_000
             i += 50_000 / 30
             k += 80_000 / 30
-            referenceDay.add(Calendar.DAY_OF_MONTH, 1)
+            historyDay.add(Calendar.DAY_OF_MONTH, 1)
         }
+
         val goalSeries = chart.addSeries("Daily Goal", goalList.keys.toList(), goalList.values.toList())
         goalSeries.marker = SeriesMarkers.SQUARE
-        goalSeries.lineStyle = SeriesLines.SOLID
+        goalSeries.lineStyle = SeriesLines.DASH_DASH
+        goalSeries.lineColor = XChartSeriesColors.RED
+        goalSeries.markerColor = XChartSeriesColors.RED
+        goalSeries.fillColor = XChartSeriesColors.RED
+
         val myrthesGoalSeries = chart.addSeries("Myrthe's daily Goal", myrthesGoalList.keys.toList(), myrthesGoalList.values.toList())
         myrthesGoalSeries.marker = SeriesMarkers.SQUARE
-        myrthesGoalSeries.lineStyle = SeriesLines.SOLID
+        myrthesGoalSeries.lineStyle = SeriesLines.DASH_DASH
+        myrthesGoalSeries.lineColor = XChartSeriesColors.YELLOW
+        myrthesGoalSeries.markerColor = XChartSeriesColors.YELLOW
+        myrthesGoalSeries.fillColor = XChartSeriesColors.YELLOW
+
+        val jonahsGoalSeries = chart.addSeries("Jonah's daily Goal", jonahsGoalList.keys.toList(), jonahsGoalList.values.toList())
+        jonahsGoalSeries.marker = SeriesMarkers.SQUARE
+        jonahsGoalSeries.lineStyle = SeriesLines.DASH_DASH
+        jonahsGoalSeries.lineColor = XChartSeriesColors.BROWN
+        jonahsGoalSeries.markerColor = XChartSeriesColors.BROWN
+        jonahsGoalSeries.fillColor = XChartSeriesColors.BROWN
+
         BitmapEncoder.saveBitmap(chart, outputFile.absolutePath, BitmapEncoder.BitmapFormat.PNG)
     }
 
@@ -292,7 +324,7 @@ class NanoTracker : Module {
         generateChart(file, stats)
     }
 
-    internal fun addStats(force: Boolean, user: String, stats: MutableMap<String, String>?) {
+    private fun addStats(force: Boolean, user: String, stats: MutableMap<String, String>?) {
         if (state != null) {
             if (!state!!.contains(user)) {
                 state!!.put(user, HashMap())
