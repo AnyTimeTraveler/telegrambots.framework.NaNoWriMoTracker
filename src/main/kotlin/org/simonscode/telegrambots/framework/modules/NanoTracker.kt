@@ -250,7 +250,7 @@ class NanoTracker : Module {
 
         chart.styler.chartTitleFont = Font(Font.MONOSPACED, Font.BOLD, 30)
         chart.styler.legendFont = Font(Font.SERIF, Font.PLAIN, 22)
-        chart.styler.legendPosition = LegendPosition.InsideSE
+        chart.styler.legendPosition = LegendPosition.InsideNW
         chart.styler.legendSeriesLineLength = 15
         chart.styler.axisTitleFont = Font(Font.SANS_SERIF, Font.BOLD, 22)
         chart.styler.axisTickLabelsFont = Font(Font.SERIF, Font.PLAIN, 18)
